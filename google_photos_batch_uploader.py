@@ -10,13 +10,23 @@ import hashlib
 from datetime import datetime
 
 # Initialize the log file
-log_file = open('upload_log.txt', 'a')
+log_file_path = 'upload_log.txt'
+log_file = open(log_file_path, 'a')
 
 
 def log_and_print(message):
     print(message)
     log_file.write(message + '\n')
 
+
+# Create a set to hold hashes of already uploaded files
+uploaded_file_hashes = set()
+with open(log_file_path, 'r') as f:
+    for line in f:
+        try:
+            uploaded_file_hashes.add(line.split(', ')[1].rsplit(' ', 1)[1])
+        except IndexError:
+            continue
 
 # Initialize the OAuth2 flow
 SCOPES = ['https://www.googleapis.com/auth/photoslibrary.appendonly']
@@ -44,7 +54,13 @@ def upload_photo(file_path, file_number, total_files):
     start_time = datetime.now()
 
     with open(file_path, 'rb') as f:
-        file_hash = hashlib.md5(f.read()).hexdigest()
+        file_data = f.read()
+        file_hash = hashlib.md5(file_data).hexdigest()
+
+    # Skip file if it has already been uploaded
+    if file_hash in uploaded_file_hashes:
+        log_and_print(f"Skipping already uploaded file: {os.path.basename(file_path)}")
+        return
 
     file_name_without_extension = os.path.splitext(os.path.basename(file_path))[0]
     description = f"Description for {file_name_without_extension}, Hash: {file_hash}"
@@ -75,8 +91,9 @@ def upload_photo(file_path, file_number, total_files):
     response = service.mediaItems().batchCreate(body=create_media_item_request).execute()
 
     elapsed_time = datetime.now() - start_time
-    log_message = f"{datetime.now()}, {os.path.basename(file_path)}, {os.path.getsize(file_path)} bytes, {time.ctime(os.path.getctime(file_path))}, {time.ctime(os.path.getmtime(file_path))}, {time.ctime(os.path.getatime(file_path))}, {elapsed_time}, {file_number}/{total_files}, {total_files}"
+    log_message = f"{datetime.now()}, {os.path.basename(file_path)}, {os.path.getsize(file_path)} bytes, Hash: {file_hash}, {time.ctime(os.path.getctime(file_path))}, {time.ctime(os.path.getmtime(file_path))}, {time.ctime(os.path.getatime(file_path))}, {elapsed_time}, {file_number}/{total_files}, {total_files}"
     log_and_print(log_message)
+    time.sleep(2)
 
 
 def scan_and_upload_folder(folder_path):
@@ -89,7 +106,6 @@ def scan_and_upload_folder(folder_path):
 
 
 # Replace with your folder path
-# scan_and_upload_folder(r'C:\Users\karl_\Downloads\TEST_GCP_UPLOADS')
 scan_and_upload_folder(r'D:\RECOVERY\PICS_VIDEOS\FAMILY')
 
 log_file.close()
